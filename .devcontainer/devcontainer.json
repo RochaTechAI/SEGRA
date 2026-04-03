@@ -1,0 +1,19 @@
+{
+    "name": "SEGRA",
+    "dockerComposeFile": [
+        "../compose.yaml"
+    ],
+    "service": "laravel.test",
+    "workspaceFolder": "/var/www/html",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "bmewburn.vscode-intelephense-client",
+                "amiralizadeh9480.laravel-extra-intellisense",
+                "onecentlin.laravel-blade",
+                "pestphp.pest-vscode"
+            ]
+        }
+    },
+    "remoteUser": "sail"
+}
