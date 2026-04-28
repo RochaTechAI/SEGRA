@@ -3,38 +3,61 @@
 namespace App\Services;
 
 use App\Models\Amostra;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Exception;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
-/**
- * Service responsavel pela orquestracao da logica de negocio.
- * Centraliza regras de LGPD e transacionalidade de dados.
- */
 class AmostraService
 {
-    public function registrarAmostra(array $data): Amostra
+    /**
+     * Registra uma nova amostra no sistema com rigor de auditoria e transação atômica.
+     */
+    public function registrarAmostra(array $dados): Amostra
     {
-        return DB::transaction(function () use ($data) {
-            try {
-                /**
-                 * LGPD Compliance:
-                 * Anonimizacao do identificador do paciente via SHA-256.
-                 */
-                $hashPaciente = hash('sha256', $data['paciente_id']);
+        return DB::transaction(function () use ($dados) {
+            // 1. Persistência da Amostra com padronização Enterprise (Fluent String)
+            $amostra = Amostra::create([
+                'codigo_externo' => $dados['identificador'],
+                'tipo_material'  => str()->lower($dados['material']),
+                'status'         => str()->lower($dados['status_amostra']),
+                'data_coleta'    => $dados['data_coleta'],
+                'hash_paciente'  => $dados['hash_paciente'], 
+            ]);
 
-                return Amostra::create([
-                    'hash_paciente'  => $hashPaciente,
-                    'codigo_externo' => $data['codigo_externo'],
-                    'tipo_material'  => $data['tipo_material'] ?? 'nao_informado',
-                    'status'         => 'coletada',
-                    'data_coleta'    => $data['data_coleta'] ?? now(),
-                ]);
+            // 2. Registro de Auditoria
+            Log::info("SEGRA-AUDIT: Amostra registrada", [
+                'uuid'           => $amostra->id,
+                'codigo_externo' => $amostra->codigo_externo,
+                'operador_id'    => Auth::id() ?? 'sistema_automático', 
+                'timestamp'      => now()->toIso8601String()
+            ]);
 
-            } catch (Exception $e) {
-                Log::error("FALHA_REGISTRO_AMOSTRA: " . $e->getMessage());
-                throw new Exception("Erro interno ao processar registro cientifico.");
-            }
+            return $amostra;
+        });
+    }
+
+    /**
+     * Atualiza o status da amostra garantindo a integridade da linha do tempo.
+     */
+    public function atualizarStatus(Amostra $amostra, string $novoStatus): Amostra
+    {
+        return DB::transaction(function () use ($amostra, $novoStatus) {
+            $statusAntigo = $amostra->status;
+            
+            $amostra->update([
+                'status' => str()->lower($novoStatus)
+            ]);
+
+            // Log de Rastreabilidade (Tracking)
+            Log::notice("SEGRA-TRACKING: Alteração de status", [
+                'uuid'        => $amostra->id,
+                'status_de'   => $statusAntigo,
+                'status_para' => str()->lower($novoStatus),
+                'operador_id' => Auth::id() ?? 'sistema_automático',
+                'data'        => now()->toIso8601String()
+            ]);
+
+            return $amostra;
         });
     }
 }

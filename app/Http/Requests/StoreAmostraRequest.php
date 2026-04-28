@@ -3,31 +3,41 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-/**
- * Validacao enterprise para entrada de novas amostras.
- * Garante que os tipos de materiais e formatos de dados estejam corretos.
- */
 class StoreAmostraRequest extends FormRequest
 {
     /**
-     * Determina se o usuario tem permissao para esta acao.
+     * Determina se o usuário está autorizado a fazer esta requisição.
      */
     public function authorize(): bool
     {
-        return true; // No futuro, implementar verificacao de permissao aqui
+        return true; // Alteraremos quando implementarmos o Sanctum
     }
 
     /**
-     * Regras de validacao estritas.
+     * Regras de validação para a criação de amostras.
      */
     public function rules(): array
     {
         return [
-            'paciente_id'    => 'required|string|min:3',
-            'codigo_externo' => 'required|string|unique:amostras,codigo_externo',
-            'tipo_material'  => 'required|string|in:sangue,plasma,dna,urina',
-            'data_coleta'    => 'nullable|date_format:Y-m-d H:i:s'
+            'identificador'  => ['required', 'string', 'unique:amostras,codigo_externo'],
+            'material'       => ['required', 'string', Rule::in(['sangue', 'plasma', 'dna', 'urina'])],
+            'status_amostra' => ['required', 'string', Rule::in(['coletada', 'em_transito', 'recebida', 'em_analise', 'finalizada'])],
+            'data_coleta'    => ['required', 'date', 'before_or_equal:now'],
+            'hash_paciente'  => ['required', 'string', 'size:64'], // Simulando um SHA-256 para LGPD
+        ];
+    }
+
+    /**
+     * Mensagens customizadas para o ambiente Enterprise.
+     */
+    public function messages(): array
+    {
+        return [
+            'material.in' => 'O material fornecido não é suportado pelo protocolo SEGRA.',
+            'status_amostra.in' => 'O status informado é inválido para o fluxo de trabalho.',
+            'data_coleta.before_or_equal' => 'A data de coleta não pode estar no futuro.',
         ];
     }
 }
